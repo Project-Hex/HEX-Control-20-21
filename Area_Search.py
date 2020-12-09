@@ -7,6 +7,10 @@ from dronekit import connect, VehicleMode, LocationGlobalRelative
 import math
 import pymavlink as mav
 
+
+from geographiclib.constants import Constants
+from geographiclib.geodesic import Geodesic
+
 # Set up option parsing to get connection string
 import argparse
 parser = argparse.ArgumentParser(description='Commands vehicle using vehicle.simple_goto.')
@@ -74,8 +78,13 @@ def get_distance_metres(aLocation1, aLocation2):
     earth's poles. It comes from the ArduPilot test code: 
     https://github.com/diydrones/ardupilot/blob/master/Tools/autotest/common.py
     """
-    dlat = aLocation2.lat - aLocation1.lat
-    dlong = aLocation2.lon - aLocation1.lon
+
+    (x1,y1) = aLocation1
+    (x2,y2) = aLocation2
+    
+    dlat = x1 - x2
+    dlong = y1 - y2
+    
     return math.sqrt((dlat*dlat) + (dlong*dlong)) * 1.113195e5
 
 def get_bearing(aLocation1, aLocation2):
@@ -86,8 +95,13 @@ def get_bearing(aLocation1, aLocation2):
     earth's poles. It comes from the ArduPilot test code:
     https://github.com/diydrones/ardupilot/blob/master/Tools/autotest/common.py
     """
-    off_x = aLocation2.lon - aLocation1.lon
-    off_y = aLocation2.lat - aLocation1.lat
+
+    (x1,y1) = aLocation1
+    (x2,y2) = aLocation2
+    
+    off_x = x1 - x2
+    off_y = y1 - y2
+    
     bearing = 90.00 + math.atan2(-off_y, off_x) * 57.2957795
     if bearing < 0:
         bearing += 360.00
@@ -146,6 +160,11 @@ def close_servo():
     vehicle.send_mavlink(msg)
 
 
+def getEndpoint(lat1, lon1, bearing, d):
+    geod = Geodesic(Constants.WGS84_a, Constants.WGS84_f)
+    d = geod.Direct(lat1, lon1, bearing, d * 1852.0)
+    return d['lat2'], d['lon2']
+
     
 #Here the mission starts
 
@@ -156,14 +175,13 @@ aLocation3 = 52.786430, -0.712614
 aLocation4 = 52.782634, -0.715660
 
 
-arm_and_takeoff(20)
 
 x_FOV = 24.13
 y_FOV = 18.14
 
-Direction1 = get_bearing(aLocation1, aLocation2)
-Direction2 = get_bearing(aLocation1, aLocation4)
-Direction3 = get_bearing(aLocation4, aLocation1)
+Direction1 = get_bearing(aLocation1, aLocation4)
+Direction2 = get_bearing(aLocation2, aLocation3)
+
 
 print("Set airspeed to 10")
 vehicle.airspeed = 10
@@ -172,18 +190,41 @@ vehicle.airspeed = 10
 Distance1 = get_distance_metres(aLocation1, aLocation2)
 Distance2 = get_distance_metres(aLocation1, aLocation4)
 
-if Distance1 < Distance2:
 
-    BigDistance = Distance2
-    SmallDistance = Distance1
+n_turns = int(Distance2/x_FOV)
 
-else:
+print(Direction1)
+print(Distance1)
 
-    BigDistance = Distance1
-    SmallDistance = Distance2
+print(n_turns)
+
+x_coordinates = [52.781840, 52.785341]
+y_coordinates = [-0.713274, -0.710237]
+
+new_coords1 = []
+new_coords2 = []
+
+for i in range(n_turns):
+
+    distance = ((i+1) * x_FOV)/1000
+    
+    new_coords1.append(getEndpoint(x_coordinates[0], y_coordinates[0], Direction1, distance))
+    new_coords2.append(getEndpoint(x_coordinates[1], y_coordinates[1], Direction2, distance))
+
+print("coords 1")
+for i in range(n_turns):
+    print(new_coords1[i])
+
+print("coords 2")
+for i in range(n_turns):
+    print(new_coords2[i])
+    
+    
+
+    
 
 
-TurnDistance = SmallDistance/(x_FOV/2)
+
 
 
 
